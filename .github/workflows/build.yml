@@ -15,10 +15,10 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -49,43 +49,110 @@ jobs:
       run: |
         brew install create-dmg
         mkdir -p mac_package/M5Logger.app/Contents/MacOS
+        mkdir -p mac_package/M5Logger.app/Contents/Resources
         cp dist/M5Logger mac_package/M5Logger.app/Contents/MacOS/M5Logger
+        
+        # Create Info.plist
+        cat <<EOF > mac_package/M5Logger.app/Contents/Info.plist
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>CFBundleExecutable</key>
+            <string>M5Logger</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.m5logger.app</string>
+            <key>CFBundleName</key>
+            <string>M5Logger</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+        </dict>
+        </plist>
+        EOF
+        
+        chmod +x mac_package/M5Logger.app/Contents/MacOS/M5Logger
         rm -f M5Logger.dmg
-        create-dmg M5Logger.dmg mac_package/M5Logger.app
+        create-dmg \
+          --volname "M5Logger" \
+          --window-pos 200 120 \
+          --window-size 600 300 \
+          --icon-size 100 \
+          --app-drop-link 425 120 \
+          M5Logger.dmg \
+          mac_package/
 
-    # Package Linux AppImage
+    # Package Linux AppImage - FIXED VERSION
     - name: Package for Linux (.AppImage)
       if: matrix.os == 'ubuntu-latest'
       run: |
-        sudo apt-get update && sudo apt-get install -y libfuse2
+        # Install dependencies
+        sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils
+        
+        # Download AppImageTool
         wget https://github.com/AppImage/AppImageKit/releases/latest/download/appimagetool-x86_64.AppImage
         chmod +x appimagetool-x86_64.AppImage
-
-        # Setup AppDir structure
+        
+        # Create proper AppDir structure
         mkdir -p AppDir/usr/bin
         mkdir -p AppDir/usr/share/applications
-
-        # Copy only your executable—DO NOT copy any AppRun
+        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+        
+        # Copy executable
         cp dist/M5Logger AppDir/usr/bin/M5Logger
-
-        # Correct .desktop file
-        cat <<EOF > AppDir/usr/share/applications/M5Logger.desktop
+        chmod +x AppDir/usr/bin/M5Logger
+        
+        # Create .desktop file in ROOT of AppDir (this is crucial!)
+        cat <<EOF > AppDir/M5Logger.desktop
         [Desktop Entry]
         Type=Application
         Name=M5Logger
+        Comment=M5StickC Plus Bluetooth Data Logger
         Exec=M5Logger
-        Icon=utilities-terminal
-        Categories=Utility;
+        Icon=M5Logger
+        Categories=Utility;Development;
+        Terminal=false
+        StartupNotify=true
         EOF
-
-        # Build the AppImage
+        
+        # Also create it in the standard location
+        cp AppDir/M5Logger.desktop AppDir/usr/share/applications/M5Logger.desktop
+        
+        # Create a simple icon (text-based)
+        cat <<EOF > AppDir/usr/share/icons/hicolor/256x256/apps/M5Logger.svg
+        <?xml version="1.0" encoding="UTF-8"?>
+        <svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
+          <rect width="256" height="256" fill="#2196F3"/>
+          <text x="128" y="140" font-family="Arial" font-size="48" fill="white" text-anchor="middle">M5</text>
+        </svg>
+        EOF
+        
+        # Create AppRun script
+        cat <<EOF > AppDir/AppRun
+        #!/bin/bash
+        HERE="\$(dirname "\$(readlink -f "\${0}")")"
+        export PATH="\${HERE}/usr/bin:\${PATH}"
+        export LD_LIBRARY_PATH="\${HERE}/usr/lib:\${LD_LIBRARY_PATH}"
+        exec "\${HERE}/usr/bin/M5Logger" "\$@"
+        EOF
+        chmod +x AppDir/AppRun
+        
+        # Validate desktop file
+        desktop-file-validate AppDir/M5Logger.desktop
+        
+        # Build AppImage
         ./appimagetool-x86_64.AppImage AppDir M5Logger.AppImage
+        
+        # Make it executable
+        chmod +x M5Logger.AppImage
 
     # Windows: .exe is already built in dist/
     - name: Package for Windows (.exe)
       if: matrix.os == 'windows-latest'
       run: |
-        echo "EXE already created by pyinstaller in dist/"
+        echo "Windows executable created successfully in dist/M5Logger.exe"
+        dir dist\
 
     # Upload the build artifacts
     - name: Upload final installers
@@ -96,3 +163,4 @@ jobs:
           dist/M5Logger*
           M5Logger.dmg
           M5Logger.AppImage
+        retention-days: 30
