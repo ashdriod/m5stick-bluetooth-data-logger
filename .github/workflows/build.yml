@@ -22,6 +22,7 @@ jobs:
       with:
         python-version: '3.11'
 
+    # macOS-specific dependencies
     - name: Install dependencies (macOS)
       if: matrix.os == 'macos-latest'
       run: |
@@ -29,6 +30,7 @@ jobs:
         pip install pyinstaller
         pip install -r requirements-macos.txt
 
+    # Linux & Windows dependencies
     - name: Install dependencies (Linux & Windows)
       if: matrix.os != 'macos-latest'
       run: |
@@ -36,10 +38,12 @@ jobs:
         pip install pyinstaller
         pip install -r requirements-common.txt
 
+    # Build with PyInstaller
     - name: Build App
       run: |
         pyinstaller --noconfirm --onefile --windowed --name M5Logger app/main.py
 
+    # Package macOS .dmg
     - name: Package for macOS
       if: matrix.os == 'macos-latest'
       run: |
@@ -49,28 +53,39 @@ jobs:
         rm -f M5Logger.dmg
         create-dmg M5Logger.dmg mac_package/M5Logger.app
 
+    # Package Linux AppImage
     - name: Package for Linux (.AppImage)
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update && sudo apt-get install -y libfuse2
-        wget https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+        wget https://github.com/AppImage/AppImageKit/releases/latest/download/appimagetool-x86_64.AppImage
         chmod +x appimagetool-x86_64.AppImage
+
+        # Create AppDir structure
         mkdir -p AppDir/usr/bin
-        cp dist/M5Logger AppDir/usr/bin/M5Logger
         mkdir -p AppDir/usr/share/applications
+
+        # Copy binary
+        cp dist/M5Logger AppDir/usr/bin/M5Logger
+
+        # Create .desktop file
         echo "[Desktop Entry]
-        Type=Application
         Name=M5Logger
         Exec=M5Logger
         Icon=utilities-terminal
+        Type=Application
         Categories=Utility;" > AppDir/usr/share/applications/m5logger.desktop
+
+        # Package it
         ./appimagetool-x86_64.AppImage AppDir M5Logger.AppImage
 
+    # Windows: .exe is already built in dist/
     - name: Package for Windows (.exe)
       if: matrix.os == 'windows-latest'
       run: |
         echo "EXE already created by pyinstaller in dist/"
 
+    # Upload the build artifacts
     - name: Upload final installers
       uses: actions/upload-artifact@v4
       with:
@@ -78,4 +93,4 @@ jobs:
         path: |
           dist/M5Logger*
           M5Logger.dmg
-          M5Logger.AppImage 
+          M5Logger.AppImage
