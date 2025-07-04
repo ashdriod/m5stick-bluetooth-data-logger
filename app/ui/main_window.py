@@ -1,174 +1,151 @@
-"""Main GUI window with device list, control buttons and live plot."""
-
+# app/ui/main_window.py
 from __future__ import annotations
-from pathlib import Path
-import csv
-import datetime
 
-from PySide6.QtCore import Qt, QThread, Signal, Slot
+from PySide6.QtCore    import Qt
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QPushButton, QLabel, QFileDialog, QMainWindow, QMessageBox
+    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QPushButton, QListWidget, QMessageBox
 )
-import pyqtgraph as pg
 
-from app.services.bluetooth import ScanWorker, BLEStreamClient
+from app.services.bluetooth import DeviceScanner, BLEClient, BLEDeviceInfo
+from app.services.recorder  import CSVRecorder
+from app.ui.plot_widget     import PlotWidget
 
 
 class MainWindow(QMainWindow):
-    """Main application window."""
+    """GUI for scanning, connecting, plotting and recording."""
 
-    NOTIFY_UUID = "0000FFE1-0000-1000-8000-00805F9B34FB"  # example UUID; replace with your characteristic
-
+    # ------------------------------------------------------------
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("M5Stick BLE Logger")
-        self.resize(800, 500)
+        self.setWindowTitle("M5Stick-BLE Data Logger")
+        self.resize(750, 520)
 
-        # UI Elements
-        self.device_list = QListWidget()
-        self.status_label = QLabel("Ready")
+        # ── widgets
+        self.status        = QLabel("Idle", alignment=Qt.AlignLeft)
+        self.device_list   = QListWidget()
 
-        self.btn_scan = QPushButton("Scan")
-        self.btn_connect = QPushButton("Connect")
-        self.btn_start = QPushButton("Start Recording")
-        self.btn_stop = QPushButton("Stop Recording")
+        self.btn_scan      = QPushButton("Scan")
+        self.btn_connect   = QPushButton("Connect")
+        self.btn_disconnect = QPushButton("Disconnect")     # NEW
+        self.btn_start     = QPushButton("Start Recording")
+        self.btn_stop      = QPushButton("Stop Recording")
 
-        # Plot
-        self.plot = pg.PlotWidget(title="Accel X/Y/Z")
-        self.plot.addLegend()
-        self.curves = {
-            axis: self.plot.plot(pen=pg.mkPen(width=2), name=axis)
-            for axis in ("X", "Y", "Z")
-        }
-        self.x_data: list[int] = []
-        self.y_data = {axis: [] for axis in ("X", "Y", "Z")}
-        self._ts0 = datetime.datetime.now()
+        self.plot          = PlotWidget()
 
-        # Layouts
-        left_layout = QVBoxLayout()
-        left_layout.addWidget(self.device_list)
-        left_layout.addWidget(self.btn_scan)
-        left_layout.addWidget(self.btn_connect)
-        left_layout.addStretch()
-        left_layout.addWidget(self.status_label)
-
-        right_layout = QVBoxLayout()
-        right_layout.addWidget(self.plot)
-        btn_row = QHBoxLayout()
-        btn_row.addWidget(self.btn_start)
-        btn_row.addWidget(self.btn_stop)
-        right_layout.addLayout(btn_row)
+        # ── layout
+        side = QVBoxLayout()
+        for w in (
+            self.device_list, self.btn_scan, self.btn_connect,
+            self.btn_disconnect, self.btn_start, self.btn_stop, self.status
+        ):
+            side.addWidget(w)
 
         container = QWidget()
-        hbox = QHBoxLayout(container)
-        hbox.addLayout(left_layout, 2)
-        hbox.addLayout(right_layout, 5)
+        main = QHBoxLayout(container)
+        main.addWidget(self.plot, 3)
+        main.addLayout(side, 1)
         self.setCentralWidget(container)
 
-        # Connections
-        self.btn_scan.clicked.connect(self.start_scan)
-        self.btn_connect.clicked.connect(self.connect_device)
-        self.btn_start.clicked.connect(self.start_recording)
-        self.btn_stop.clicked.connect(self.stop_recording)
+        # ── state
+        self._scanner: DeviceScanner | None = None
+        self._client : BLEClient     | None = None
+        self._rec    : CSVRecorder   | None = None
 
-        # Threads / workers holders
-        self._scan_thread: QThread | None = None
-        self._ble_client: BLEStreamClient | None = None
-        self._client_thread: QThread | None = None
+        # ── initial button states
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(False)
+        self.btn_disconnect.setEnabled(False)
 
-        # Recording state
-        self._csv_writer: csv.writer | None = None
-        self._csv_file = None
+        # ── signals
+        self.btn_scan.clicked.connect(self.scan_devices)
+        self.btn_connect.clicked.connect(self.connect_selected)
+        self.btn_disconnect.clicked.connect(self.force_disconnect)   # NEW
+        self.btn_start.clicked.connect(self.start_rec)
+        self.btn_stop.clicked.connect(self.stop_rec)
 
-    # ---------- Scan / Connect ----------
-    @Slot()
-    def start_scan(self):
-        if self._scan_thread and self._scan_thread.isRunning():
-            return  # already scanning
+    # ============================================================
+    # Scanning ----------------------------------------------------
+    def scan_devices(self) -> None:
         self.device_list.clear()
-        self.status_label.setText("Scanning…")
+        self.status.setText("Scanning …")
+        self.btn_scan.setEnabled(False)
 
-        self._scan_thread = QThread()
-        worker = ScanWorker(timeout=5.0)
-        worker.moveToThread(self._scan_thread)
-        self._scan_thread.started.connect(worker.run)
-        worker.device_found.connect(self.add_device)
-        worker.finished.connect(self._scan_thread.quit)
-        worker.finished.connect(worker.deleteLater)
-        self._scan_thread.finished.connect(self.scan_finished)
-        self._scan_thread.start()
+        self._scanner = DeviceScanner(timeout=5.0)
+        self._scanner.device_found.connect(self._add_device)
+        self._scanner.scan_finished.connect(self._scan_done)
+        self._scanner.start()
 
-    @Slot(str, str)
-    def add_device(self, name: str, address: str):
-        self.device_list.addItem(f"{name} | {address}")
+    def _add_device(self, info: BLEDeviceInfo) -> None:
+        text = f"{info.name} [{info.address}]  RSSI:{info.rssi}"
+        self.device_list.addItem(text)
 
-    @Slot()
-    def scan_finished(self):
-        self.status_label.setText("Scan finished")
+    def _scan_done(self) -> None:
+        self.status.setText("Scan complete."
+                            if self.device_list.count() else "No devices found.")
+        self.btn_scan.setEnabled(True)
 
-    @Slot()
-    def connect_device(self):
+    # ============================================================
+    # Connection --------------------------------------------------
+    def connect_selected(self) -> None:
+        if self._client:
+            QMessageBox.information(self, "Already connected", "Disconnect first.")
+            return
+
         item = self.device_list.currentItem()
         if not item:
-            QMessageBox.warning(self, "No device", "Please select a device first")
+            QMessageBox.warning(self, "No selection", "Pick a device first.")
             return
-        address = item.text().split("|")[-1].strip()
-        self.status_label.setText(f"Connecting to {address}…")
 
-        self._client_thread = QThread()
-        self._ble_client = BLEStreamClient(address, self.NOTIFY_UUID)
-        self._ble_client.moveToThread(self._client_thread)
-        self._client_thread.started.connect(self._ble_client.start)
+        address = item.text().split("[")[1].split("]")[0]
+        self.status.setText(f"Connecting to {address} …")
 
-        # Signals
-        self._ble_client.connected.connect(lambda: self.status_label.setText("Connected"))
-        self._ble_client.disconnected.connect(lambda: self.status_label.setText("Disconnected"))
-        self._ble_client.error.connect(lambda e: QMessageBox.critical(self, "BLE Error", e))
-        self._ble_client.data_received.connect(self.handle_payload)
+        self._client = BLEClient(address)
+        self._client.connected.connect(lambda: self._on_connected(address))
+        self._client.disconnected.connect(self._on_disconnected)
+        self._client.packet_ready.connect(self._handle_packet)
+        self._client.start()
 
-        self._client_thread.start()
+    def force_disconnect(self) -> None:                       # NEW
+        if self._client:
+            self.status.setText("Disconnecting …")
+            self._client.request_disconnect()  # async flag inside thread
 
-    # ---------- Data / Plot / CSV ----------
-    @Slot(bytes)
-    def handle_payload(self, payload: bytes):
-        # payload is 6*int16 = 12 bytes little‑endian
-        if len(payload) != 12:
+    def _on_connected(self, addr: str) -> None:
+        self.status.setText(f"Connected to {addr}")
+        self.btn_start.setEnabled(True)
+        self.btn_disconnect.setEnabled(True)
+
+    def _on_disconnected(self, reason: str) -> None:
+        self.status.setText(f"Disconnected: {reason}")
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(False)
+        self.btn_disconnect.setEnabled(False)
+        self._client = None
+        if self._rec:
+            self.stop_rec()
+
+    # ============================================================
+    # Recording & plotting ---------------------------------------
+    def start_rec(self) -> None:
+        self._rec = CSVRecorder(prefix="m5session")
+        self.status.setText(f"Recording → {self._rec.path.name}")
+        self.btn_start.setEnabled(False)
+        self.btn_stop.setEnabled(True)
+
+    def stop_rec(self) -> None:
+        if not self._rec:
             return
-        acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z = int.from_bytes(payload[0:2], "little", signed=True), \
-                                                      int.from_bytes(payload[2:4], "little", signed=True), \
-                                                      int.from_bytes(payload[4:6], "little", signed=True), \
-                                                      int.from_bytes(payload[6:8], "little", signed=True), \
-                                                      int.from_bytes(payload[8:10], "little", signed=True), \
-                                                      int.from_bytes(payload[10:12], "little", signed=True)
-        t_ms = int((datetime.datetime.now() - self._ts0).total_seconds() * 1000)
-        self.x_data.append(t_ms)
-        for axis, v in zip(("X", "Y", "Z"), (acc_x, acc_y, acc_z)):
-            self.y_data[axis].append(v)
-            self.curves[axis].setData(self.x_data, self.y_data[axis])
+        rec, self._rec = self._rec, None
+        rec.close()
+        QMessageBox.information(self, "Saved", f"Data written to {rec.path}")
+        self.status.setText("Recording stopped.")
+        self.btn_start.setEnabled(True)
+        self.btn_stop.setEnabled(False)
 
-        if self._csv_writer:
-            self._csv_writer.writerow([t_ms, acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z])
-
-    # ---------- Recording ----------
-    @Slot()
-    def start_recording(self):
-        if self._csv_writer:
-            return  # already recording
-        Path("data").mkdir(exist_ok=True)
-        ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        default_name = f"session_{ts}.csv"
-        path, _ = QFileDialog.getSaveFileName(self, "Save CSV", str(Path("data") / default_name), "CSV (*.csv)")
-        if not path:
-            return
-        self._csv_file = open(path, "w", newline="")
-        self._csv_writer = csv.writer(self._csv_file)
-        self._csv_writer.writerow(["timestamp_ms", "acc_x", "acc_y", "acc_z", "gyro_x", "gyro_y", "gyro_z"])
-        self.status_label.setText(f"Recording → {Path(path).name}")
-
-    @Slot()
-    def stop_recording(self):
-        if self._csv_file:
-            self._csv_file.close()
-            self._csv_writer = None
-            self._csv_file = None
-            self.status_label.setText("Recording stopped")
+    # ----- incoming BLE packet
+    def _handle_packet(self, rows: list[tuple]) -> None:
+        _ts, ax, ay, az, gx, gy, gz = rows[-1]
+        self.plot.add_sample(ax, ay, az, gx, gy, gz)
+        if self._rec and not self._rec.closed:
+            self._rec.add_rows(rows)
