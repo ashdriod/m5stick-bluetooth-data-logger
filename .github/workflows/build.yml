@@ -1,0 +1,72 @@
+name: Build & Package PySide6 App
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pyinstaller
+        pip install -r requirements.txt
+
+    - name: Build App
+      run: |
+        pyinstaller --noconfirm --onefile --windowed --name M5Logger app/main.py
+
+    - name: Package for macOS
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install create-dmg
+        mkdir -p mac_package/M5Logger.app/Contents/MacOS
+        cp dist/M5Logger mac_package/M5Logger.app/Contents/MacOS/M5Logger
+        create-dmg mac_package/M5Logger.app --overwrite --dmg-title="M5Logger" --app-drop-link 600 185
+
+    - name: Package for Linux (.AppImage)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update && sudo apt-get install -y libfuse2
+        wget https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage
+        chmod +x appimagetool-x86_64.AppImage
+        mkdir -p AppDir/usr/bin
+        cp dist/M5Logger AppDir/usr/bin/M5Logger
+        mkdir -p AppDir/usr/share/applications
+        echo "[Desktop Entry]
+        Type=Application
+        Name=M5Logger
+        Exec=M5Logger
+        Icon=utilities-terminal
+        Categories=Utility;" > AppDir/usr/share/applications/m5logger.desktop
+        ./appimagetool-x86_64.AppImage AppDir M5Logger.AppImage
+
+    - name: Package for Windows (.exe)
+      if: matrix.os == 'windows-latest'
+      run: |
+        echo "EXE already created by pyinstaller in dist/"
+
+    - name: Upload final installers
+      uses: actions/upload-artifact@v4
+      with:
+        name: M5Logger-${{ matrix.os }}
+        path: |
+          dist/M5Logger*
+          M5Logger.dmg
+          M5Logger.AppImage 
