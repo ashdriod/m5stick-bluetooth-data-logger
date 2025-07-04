@@ -46,7 +46,12 @@ jobs:
         brew install create-dmg
         mkdir -p mac_package/M5Logger.app/Contents/MacOS
         cp dist/M5Logger mac_package/M5Logger.app/Contents/MacOS/M5Logger
-        create-dmg mac_package/M5Logger.app --overwrite --dmg-title="M5Logger" --app-drop-link 600 185
+        create-dmg \
+          --overwrite \
+          --dmg-title="M5Logger" \
+          --app-drop-link 600 185 \
+          M5Logger.dmg \
+          mac_package/M5Logger.app
 
     - name: Package for Linux (.AppImage)
       if: matrix.os == 'ubuntu-latest'
