@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-20.04, windows-latest, macos-latest]
+        os: [ubuntu-22.04, windows-latest, macos-latest]
 
     steps:
     - name: Checkout code
@@ -83,11 +83,11 @@ jobs:
           M5Logger.dmg \
           mac_package/
 
-    # Package Linux AppImage - Ubuntu 20.04+ Compatible
+    # Package Linux AppImage - Ubuntu 22.04 Compatible
     - name: Package for Linux (.AppImage)
-      if: matrix.os == 'ubuntu-20.04'
+      if: matrix.os == 'ubuntu-22.04'
       run: |
-        # Install dependencies (libfuse2 is available by default on Ubuntu 20.04)
+        # Install dependencies (libfuse2 must be explicitly installed on Ubuntu 22.04)
         sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils imagemagick
         
         # Download AppImageTool
