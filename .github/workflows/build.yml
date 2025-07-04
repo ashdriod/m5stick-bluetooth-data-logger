@@ -47,11 +47,7 @@ jobs:
         mkdir -p mac_package/M5Logger.app/Contents/MacOS
         cp dist/M5Logger mac_package/M5Logger.app/Contents/MacOS/M5Logger
         rm -f M5Logger.dmg
-        create-dmg \
-          --dmg-title="M5Logger" \
-          --app-drop-link 600 185 \
-          M5Logger.dmg \
-          mac_package/M5Logger.app
+        create-dmg M5Logger.dmg mac_package/M5Logger.app
 
     - name: Package for Linux (.AppImage)
       if: matrix.os == 'ubuntu-latest'
