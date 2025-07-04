@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-20.04, windows-latest, macos-latest]
 
     steps:
     - name: Checkout code
@@ -83,11 +83,11 @@ jobs:
           M5Logger.dmg \
           mac_package/
 
-    # Package Linux AppImage - FULLY FIXED VERSION
+    # Package Linux AppImage - Ubuntu 20.04+ Compatible
     - name: Package for Linux (.AppImage)
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-20.04'
       run: |
-        # Install dependencies
+        # Install dependencies (libfuse2 is available by default on Ubuntu 20.04)
         sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils imagemagick
         
         # Download AppImageTool
