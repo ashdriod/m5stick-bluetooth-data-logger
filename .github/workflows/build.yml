@@ -68,13 +68,18 @@ jobs:
         # Copy binary
         cp dist/M5Logger AppDir/usr/bin/M5Logger
 
-        # Create .desktop file
-        echo "[Desktop Entry]
+        mkdir -p AppDir/usr/share/applications
+
+        cat <<EOF > AppDir/usr/share/applications/M5Logger.desktop
+        [Desktop Entry]
+        Type=Application
         Name=M5Logger
         Exec=M5Logger
         Icon=utilities-terminal
-        Type=Application
-        Categories=Utility;" > AppDir/usr/share/applications/m5logger.desktop
+        Categories=Utility;
+        EOF
+
+
 
         # Package it
         ./appimagetool-x86_64.AppImage AppDir M5Logger.AppImage
