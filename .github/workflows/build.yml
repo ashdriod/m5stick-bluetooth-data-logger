@@ -61,15 +61,14 @@ jobs:
         wget https://github.com/AppImage/AppImageKit/releases/latest/download/appimagetool-x86_64.AppImage
         chmod +x appimagetool-x86_64.AppImage
 
-        # Create AppDir structure
+        # Setup AppDir structure
         mkdir -p AppDir/usr/bin
         mkdir -p AppDir/usr/share/applications
 
-        # Copy binary
+        # Copy only your executable—DO NOT copy any AppRun
         cp dist/M5Logger AppDir/usr/bin/M5Logger
 
-        mkdir -p AppDir/usr/share/applications
-
+        # Correct .desktop file
         cat <<EOF > AppDir/usr/share/applications/M5Logger.desktop
         [Desktop Entry]
         Type=Application
@@ -79,9 +78,7 @@ jobs:
         Categories=Utility;
         EOF
 
-
-
-        # Package it
+        # Build the AppImage
         ./appimagetool-x86_64.AppImage AppDir M5Logger.AppImage
 
     # Windows: .exe is already built in dist/
