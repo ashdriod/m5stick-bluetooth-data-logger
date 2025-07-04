@@ -83,12 +83,12 @@ jobs:
           M5Logger.dmg \
           mac_package/
 
-    # Package Linux AppImage - FIXED VERSION
+    # Package Linux AppImage - FULLY FIXED VERSION
     - name: Package for Linux (.AppImage)
       if: matrix.os == 'ubuntu-latest'
       run: |
         # Install dependencies
-        sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils
+        sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils imagemagick
         
         # Download AppImageTool
         wget https://github.com/AppImage/AppImageKit/releases/latest/download/appimagetool-x86_64.AppImage
@@ -103,6 +103,17 @@ jobs:
         cp dist/M5Logger AppDir/usr/bin/M5Logger
         chmod +x AppDir/usr/bin/M5Logger
         
+        # Create a proper PNG icon (256x256)
+        convert -size 256x256 xc:'#2196F3' \
+          -gravity center \
+          -pointsize 72 \
+          -fill white \
+          -annotate +0+0 'M5' \
+          AppDir/M5Logger.png
+        
+        # Also place icon in standard location
+        cp AppDir/M5Logger.png AppDir/usr/share/icons/hicolor/256x256/apps/M5Logger.png
+        
         # Create .desktop file in ROOT of AppDir (this is crucial!)
         cat <<EOF > AppDir/M5Logger.desktop
         [Desktop Entry]
@@ -111,22 +122,13 @@ jobs:
         Comment=M5StickC Plus Bluetooth Data Logger
         Exec=M5Logger
         Icon=M5Logger
-        Categories=Utility;Development;
+        Categories=Utility;
         Terminal=false
         StartupNotify=true
         EOF
         
         # Also create it in the standard location
         cp AppDir/M5Logger.desktop AppDir/usr/share/applications/M5Logger.desktop
-        
-        # Create a simple icon (text-based)
-        cat <<EOF > AppDir/usr/share/icons/hicolor/256x256/apps/M5Logger.svg
-        <?xml version="1.0" encoding="UTF-8"?>
-        <svg width="256" height="256" xmlns="http://www.w3.org/2000/svg">
-          <rect width="256" height="256" fill="#2196F3"/>
-          <text x="128" y="140" font-family="Arial" font-size="48" fill="white" text-anchor="middle">M5</text>
-        </svg>
-        EOF
         
         # Create AppRun script
         cat <<EOF > AppDir/AppRun
@@ -146,6 +148,9 @@ jobs:
         
         # Make it executable
         chmod +x M5Logger.AppImage
+        
+        # Verify the AppImage was created
+        ls -la M5Logger.AppImage
 
     # Windows: .exe is already built in dist/
     - name: Package for Windows (.exe)
