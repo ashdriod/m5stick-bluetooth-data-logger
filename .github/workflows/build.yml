@@ -87,8 +87,8 @@ jobs:
     - name: Package for Linux (.AppImage)
       if: matrix.os == 'ubuntu-22.04'
       run: |
-        # Install dependencies (libfuse2 must be explicitly installed on Ubuntu 22.04)
-        sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils imagemagick
+        # Install dependencies including fonts
+        sudo apt-get update && sudo apt-get install -y libfuse2 desktop-file-utils imagemagick fonts-liberation
         
         # Download AppImageTool
         wget https://github.com/AppImage/AppImageKit/releases/latest/download/appimagetool-x86_64.AppImage
@@ -103,11 +103,12 @@ jobs:
         cp dist/M5Logger AppDir/usr/bin/M5Logger
         chmod +x AppDir/usr/bin/M5Logger
         
-        # Create a proper PNG icon (256x256)
+        # Create a proper PNG icon (256x256) with available font
         convert -size 256x256 xc:'#2196F3' \
           -gravity center \
           -pointsize 72 \
           -fill white \
+          -font Liberation-Sans-Bold \
           -annotate +0+0 'M5' \
           AppDir/M5Logger.png
         
