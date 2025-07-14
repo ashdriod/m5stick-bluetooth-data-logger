@@ -1,6 +1,6 @@
 """
 CSV recorder – appends rows to a timestamped CSV file.
-Accepts optional custom column headers.
+Supports optional custom headers and an optional prefix column.
 """
 from __future__ import annotations
 import csv, datetime, pathlib
@@ -15,7 +15,8 @@ class CSVRecorder:
         self._file   = self._path.open("w", newline="")
         self._writer = csv.writer(self._file)
 
-        default_headers = ["timestamp_ms",
+        default_headers = ["segment",
+                           "timestamp_ms",
                            "acc_x", "acc_y", "acc_z",
                            "gyro_x", "gyro_y", "gyro_z"]
         self._writer.writerow(headers or default_headers)
@@ -23,14 +24,20 @@ class CSVRecorder:
 
     # ────────────────────────────────────────────────────────────
     @property
-    def path(self) -> pathlib.Path:                    # for GUI display
+    def path(self) -> pathlib.Path:
         return self._path
 
-    def add_rows(self, rows: list[tuple]):            # fast batch append
+    # append rows as-is
+    def add_rows(self, rows: list[tuple]):
         if not self.closed:
             self._writer.writerows(rows)
 
-    def close(self) -> None:
+    # append rows with a leading value
+    def add_rows_with_prefix(self, prefix, rows: list[tuple]):
+        if not self.closed:
+            self._writer.writerows([(prefix, *r) for r in rows])
+
+    def close(self):
         if not self.closed:
             self._file.close()
             self.closed = True
