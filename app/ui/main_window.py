@@ -16,13 +16,13 @@ from app.ui.output_widget   import OutputWidget
 class MainWindow(QMainWindow):
     """Input-mode: plot + logging  •  Output-mode: prediction screen."""
 
-    # ------------------------------------------------------------
+    
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("M5Stick-BLE Data Logger")
         self.resize(820, 560)
 
-        # ────────── INPUT widgets ──────────────────────────────
+        
         self.status         = QLabel("Idle")
         self.device_list    = QListWidget()
         self.btn_scan       = QPushButton("Scan")
@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
         self.btn_seg_m.clicked.connect(lambda: self._change_segment(-1))
         self.btn_show_out.clicked.connect(self._show_output_mode)
         self._output_widget.btn_back.clicked.connect(self._show_input_mode)
+        
 
     # ============================================================
     # Mode toggle
@@ -94,6 +95,9 @@ class MainWindow(QMainWindow):
             return
         self._output_mode = True
         self._input_root.hide(); self._output_widget.show()
+
+    def _handle_prediction(self, label: str) -> None:
+        self._output_widget.update_output(label)
 
     def _show_input_mode(self):
         if not self._output_mode:
@@ -135,6 +139,12 @@ class MainWindow(QMainWindow):
 
         self.status.setText(f"Connecting to {addr}…")
         self._client = BLEClient(addr)
+        if self._client is not None and hasattr(self._client, "prediction_ready"):
+            self._client.prediction_ready.connect(self._handle_prediction)
+        else:
+            QMessageBox.critical(self, "BLE Error",
+                                 "Failed to create BLEClient or signal missing.")
+            return
         self._client.connected.connect(self._on_connected)
         self._client.disconnected.connect(self._on_disconnected)
         self._client.packet_ready.connect(self._handle_raw)
@@ -158,8 +168,7 @@ class MainWindow(QMainWindow):
         if self._client:
             self._client.request_disconnect()
 
-    # ============================================================
-    # Recording
+    
     def start_rec(self):
         self._raw_rec = CSVRecorder(
             prefix="raw",
@@ -183,8 +192,7 @@ class MainWindow(QMainWindow):
         self._raw_rec = self._feat_rec = None
         self.btn_start.setEnabled(True); self.btn_stop.setEnabled(False)
 
-    # ============================================================
-    # Data callbacks
+
     def _handle_raw(self, rows:list[tuple]):
         _, ax, ay, az, gx, gy, gz = rows[-1]
         if not self._output_mode:
