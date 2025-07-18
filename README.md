@@ -72,7 +72,7 @@ This mode allows you to view **live predictions** from a TinyML model running di
 
    👉 [View TinyML BLE Arduino Code (Gist)](https://gist.github.com/ashdriod/8426586ab28beff912e39af4f044e452)
 
-   > This firmware runs a trained ML model (e.g., Edge Impulse) on raw IMU data, and sends predictions like "Still" or "Moving" over BLE.
+   > This firmware runs a trained Tiny ML model on raw IMU data, and sends predictions like "Still" or "Moving" over BLE.
 
 2. **Launch the App** (same one used for data collection).
 
@@ -100,7 +100,7 @@ Below is an example of what the GUI displays when predictions are being streamed
 
 This app was developed and built on macOS, specifically for **M-series (Apple Silicon)** devices.
 
-If you try to run it the usual way (e.g., from GitHub Actions builds for Windows/Linux), you may run into macOS security restrictions — gatekeeper, app signing, notarization, etc.
+If you try to run it the usual way (e.g., from GitHub Actions builds for Windows/Linux/MacOS), you may run into macOS security restrictions — gatekeeper, app signing, notarization, etc.
 
 ✅ For convenience, I’ve already built the app locally and placed the full **macOS build** inside the `dist/` folder.
 
@@ -115,4 +115,5 @@ If you try to run it the usual way (e.g., from GitHub Actions builds for Windows
 If you're familiar with macOS app builds and permissions, feel free to try running directly from GitHub Actions too. But for most users, the local `dist/` build should work out of the box.
 
 Thank you and enjoy logging your M5Stick data!
+
 
