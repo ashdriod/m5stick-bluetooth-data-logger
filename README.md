@@ -10,7 +10,11 @@ You can use this tool for **real-time sensor data logging**, **data labeling**, 
 
 ### ✅ Download the App
 
-You can find fully built versions for Windows, macOS, and Linux in the **GitHub Actions** build artifacts.
+You can find fully built versions for **Windows**, **macOS**, and **Linux** in the GitHub Actions build artifacts:
+
+👉 [Download from GitHub Actions (latest build)](https://github.com/ashdriod/m5stick-bluetooth-data-logger/actions/runs/16281181988)
+
+> 📦 Artifacts include `.exe`, `.dmg`, and `.AppImage` files ready to run on your platform.
 
 > Once downloaded and installed, you’ll see a screen like this:
 
